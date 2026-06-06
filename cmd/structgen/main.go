@@ -12,6 +12,17 @@ import (
 	"github.com/korylprince/go-adm/utils/replace"
 )
 
+type paths []string
+
+func (p *paths) String() string {
+	return strings.Join(*p, ",")
+}
+
+func (p *paths) Set(v string) error {
+	*p = append(*p, v)
+	return nil
+}
+
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [flags] [yamlFile [yamlFile [...]]]\n\nGenerate Go structs from YAML schema files.\nEither provide local YAML files as arguments or use -repo/-commit/-path to fetch from a git repository.\n\nFlags:\n", os.Args[0])
@@ -25,8 +36,9 @@ func main() {
 		flReqDef = flag.Bool("reqdef", false, "generate required and default struct tags")
 		flRepo   = flag.String("repo", "", "git repository URL")
 		flCommit = flag.String("commit", "", "git commit")
-		flPath   = flag.String("path", "", "path within git repository to YAML schema directory")
+		flPaths  paths
 	)
+	flag.Var(&flPaths, "path", "path within git repository to YAML schema directory (can be specified multiple times)")
 	flag.Parse()
 
 	var err error
@@ -61,10 +73,10 @@ func main() {
 		if *flCommit == "" {
 			log.Fatal("-commit must be specified when using -repo")
 		}
-		if *flPath == "" {
+		if len(flPaths) == 0 {
 			log.Fatal("-path must be specified when using -repo")
 		}
-		err = structgen.GenerateFromGit(*flRepo, *flCommit, *flPath, *flPkg, repl, tags, f, encOpts...)
+		err = structgen.GenerateFromGit(*flRepo, *flCommit, flPaths, *flPkg, repl, tags, f, encOpts...)
 	} else {
 		if len(flag.Args()) < 1 {
 			fmt.Fprintf(flag.CommandLine.Output(), "no yamlFile names provided\n")

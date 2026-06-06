@@ -94,7 +94,7 @@ func GenerateFromFiles(fileNames []string, pkg string, reps replace.Replacements
 	return nil
 }
 
-func GenerateFromGit(repoURL, commit, path, pkg string, reps replace.Replacements, tags []string, out io.Writer, opts ...EncodeOption) error {
+func GenerateFromGit(repoURL, commit string, paths []string, pkg string, reps replace.Replacements, tags []string, out io.Writer, opts ...EncodeOption) error {
 	repo, err := git.New(repoURL, commit)
 	if err != nil {
 		return fmt.Errorf("could not check out repository: %w", err)
@@ -106,30 +106,32 @@ func GenerateFromGit(repoURL, commit, path, pkg string, reps replace.Replacement
 	}
 
 	var schemas []*schema.Schema
-	if err = util.Walk(repo, path, func(filePath string, info fs.FileInfo, _ error) error {
-		if !strings.HasSuffix(info.Name(), ".yaml") {
+	for _, path := range paths {
+		if err = util.Walk(repo, path, func(filePath string, info fs.FileInfo, _ error) error {
+			if !strings.HasSuffix(info.Name(), ".yaml") {
+				return nil
+			}
+
+			buf, err := util.ReadFile(repo, filePath)
+			if err != nil {
+				return fmt.Errorf("could not read %s: %w", filePath, err)
+			}
+
+			s, err := schema.New(buf)
+			if err != nil {
+				return fmt.Errorf("could not parse %s: %w", filePath, err)
+			}
+			schemas = append(schemas, s)
+
 			return nil
+		}); err != nil {
+			return err
 		}
-
-		buf, err := util.ReadFile(repo, filePath)
-		if err != nil {
-			return fmt.Errorf("could not read %s: %w", filePath, err)
-		}
-
-		s, err := schema.New(buf)
-		if err != nil {
-			return fmt.Errorf("could not parse %s: %w", filePath, err)
-		}
-		schemas = append(schemas, s)
-
-		return nil
-	}); err != nil {
-		return err
 	}
 
 	f := jen.NewFile(pkg)
 	f.HeaderComment("DO NOT EDIT")
-	f.HeaderComment(fmt.Sprintf("generated from %s:%s/%s", repoURL, hash, path))
+	f.HeaderComment(fmt.Sprintf("generated from %s:%s/%s", repoURL, hash, strings.Join(paths, ",")))
 
 	file := schema.NewFile(schemas)
 	opts = append([]EncodeOption{WithReplacements(reps), WithSchemaEncoderOption(schema.WithTags(tags))}, opts...)
