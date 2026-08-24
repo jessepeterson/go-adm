@@ -55,6 +55,11 @@ func (e *Encoder) Encode(file *schema.File) {
 			e.enc.EncodeEnum(t)
 		case *schema.Struct:
 			e.enc.EncodeStruct(t)
+		case *schema.Map:
+			// A schema whose top level payload keys are a free-form dictionary
+			// yields a Map rather than a Struct. Without this it was skipped
+			// silently, so the schema generated no type at all and no error.
+			e.enc.EncodeMap(t)
 		}
 	}
 }
